@@ -144,6 +144,41 @@ Features:
 - Room detail: check availability, create/cancel bookings
 - Overlap errors shown inline
 
+## Flutter Mobile (iOS/Android)
+
+**Requires Flutter SDK >= 3.38** (Dart 3.10).
+
+```bash
+cd flutter
+flutter pub get
+flutter run
+```
+
+### API URL Configuration
+
+The app connects to GraphQL backend via `API_URL` (default: `http://10.0.2.2:4000/graphql` for Android emulator).
+
+| Platform         | URL                                      | Command                                                              |
+|-----------------|------------------------------------------|----------------------------------------------------------------------|
+| Android emulator | `http://10.0.2.2:4000/graphql`          | `flutter run` (default)                                              |
+| iOS simulator    | `http://localhost:4000/graphql`          | `flutter run --dart-define=API_URL=http://localhost:4000/graphql`     |
+| Real device      | `http://<LAN_IP>:4000/graphql`          | `flutter run --dart-define=API_URL=http://192.168.x.x:4000/graphql`  |
+
+### Features
+- Hotels list with rooms (tap Open to navigate)
+- Room detail: date pickers, check availability, create booking
+- Bookings list with Cancel button for ACTIVE bookings
+- Overlap errors shown as friendly message
+- Pull-to-refresh on hotels, manual refresh on bookings
+
+### Testing Overlap in UI
+1. Open Room 101
+2. Pick dates 2025-06-03 → 2025-06-07
+3. Tap "Check availability" → shows "Not available" with conflict
+4. Tap "Book" → shows "Dates overlap with an existing booking"
+5. Pick dates 2025-06-06 → 2025-06-09 → "Book" succeeds
+6. Cancel the new booking from the list
+
 ## Cleanup
 
 ```bash
