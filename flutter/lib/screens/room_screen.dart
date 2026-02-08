@@ -1,9 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 import '../api/graphql_documents.dart';
 import '../app_settings.dart';
 import '../l10n.dart';
+
+// ── Colors ──────────────────────────────────────────────────────
+const _blue = Color(0xFF3D7BF7);
+const _red = Color(0xFFE53935);
+const _lightGreen = Color(0xFF8BC34A);
+const _deepGreen = Color(0xFF2E7D32);
+
+// ── Availability state machine ──────────────────────────────────
+enum AvailabilityState {
+  idle, // no range chosen
+  selected, // range picked, not yet checked
+  checkedAvailable, // availability = true
+  checkedConflict, // availability = false (has conflicts)
+  bookedSuccess, // booking created
+}
+
+// ════════════════════════════════════════════════════════════════
+//  RoomScreen
+// ════════════════════════════════════════════════════════════════
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -16,79 +36,163 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
-  DateTime? _startDate;
-  DateTime? _endDate;
+  // ── Calendar state ──
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
 
-  bool _checkingAvailability = false;
+  // ── Availability state ──
+  AvailabilityState _availState = AvailabilityState.idle;
+  Set<DateTime> _busyDays = {};
+  bool _isChecking = false;
+  bool _isBooking = false;
+
+  // ── Availability raw result (for banner) ──
   Map<String, dynamic>? _availabilityResult;
   String? _availabilityError;
 
+  // ── Action feedback ──
   String? _actionMessage;
   bool _actionIsError = false;
 
-  String _formatDate(DateTime d) =>
+  // ── Bookings list refresh key ──
+  int _bookingsVersion = 0;
+
+  // ── Helpers ──────────────────────────────────────────────────
+
+  DateTime _norm(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+
+  String _fmtDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> _pickDate(BuildContext context, {required bool isStart}) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: now.subtract(const Duration(days: 365)),
-      lastDate: now.add(const Duration(days: 730)),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startDate = picked;
-        } else {
-          _endDate = picked;
-        }
-        _availabilityResult = null;
-        _availabilityError = null;
-        _actionMessage = null;
-      });
+  bool get _rangeValid =>
+      _rangeStart != null &&
+      _rangeEnd != null &&
+      _rangeStart!.isBefore(_rangeEnd!);
+
+  /// Expand a half-open interval [start, end) into a set of normalized days.
+  Set<DateTime> _expandInterval(DateTime start, DateTime end) {
+    final days = <DateTime>{};
+    var d = _norm(start);
+    final e = _norm(end);
+    while (d.isBefore(e)) {
+      days.add(d);
+      d = d.add(const Duration(days: 1));
+    }
+    return days;
+  }
+
+  /// Compute busy days = intersection of conflict intervals with selected range.
+  Set<DateTime> _computeBusyDays(List conflicts) {
+    if (_rangeStart == null || _rangeEnd == null) return {};
+    final rangeDays = _expandInterval(_rangeStart!, _rangeEnd!);
+    final busy = <DateTime>{};
+    for (final c in conflicts) {
+      final cs = DateTime.parse(c['startDate'] as String);
+      final ce = DateTime.parse(c['endDate'] as String);
+      final conflictDays = _expandInterval(cs, ce);
+      busy.addAll(conflictDays.intersection(rangeDays));
+    }
+    return busy;
+  }
+
+  // ── Color logic ─────────────────────────────────────────────
+
+  Color _dayCircleColor(DateTime day) {
+    final nd = _norm(day);
+    switch (_availState) {
+      case AvailabilityState.idle:
+      case AvailabilityState.selected:
+        return _blue;
+      case AvailabilityState.checkedAvailable:
+        return _lightGreen;
+      case AvailabilityState.checkedConflict:
+        return _busyDays.contains(nd) ? _red : _blue;
+      case AvailabilityState.bookedSuccess:
+        return _deepGreen;
     }
   }
 
-  bool get _datesValid =>
-      _startDate != null &&
-      _endDate != null &&
-      _startDate!.isBefore(_endDate!);
+  Color _highlightBarColor() {
+    switch (_availState) {
+      case AvailabilityState.idle:
+      case AvailabilityState.selected:
+      case AvailabilityState.checkedConflict:
+        return _blue.withAlpha(50);
+      case AvailabilityState.checkedAvailable:
+        return _lightGreen.withAlpha(50);
+      case AvailabilityState.bookedSuccess:
+        return _deepGreen.withAlpha(50);
+    }
+  }
 
-  Future<void> _checkAvailability(GraphQLClient client) async {
-    if (!_datesValid) return;
+  // ── Range selection callback ────────────────────────────────
+
+  void _onRangeSelected(DateTime? start, DateTime? end, DateTime focused) {
     setState(() {
-      _checkingAvailability = true;
+      _rangeStart = start;
+      _rangeEnd = end;
+      _focusedDay = focused;
+      _availState = (start != null && end != null)
+          ? AvailabilityState.selected
+          : AvailabilityState.idle;
+      _busyDays = {};
       _availabilityResult = null;
       _availabilityError = null;
       _actionMessage = null;
+    });
+  }
+
+  // ── Check availability ──────────────────────────────────────
+
+  Future<void> _checkAvailability(GraphQLClient client) async {
+    if (!_rangeValid) return;
+    setState(() {
+      _isChecking = true;
+      _availabilityResult = null;
+      _availabilityError = null;
+      _actionMessage = null;
+      _busyDays = {};
     });
 
     final result = await client.query(QueryOptions(
       document: roomAvailabilityQuery,
       variables: {
         'roomId': widget.roomId,
-        'from': _formatDate(_startDate!),
-        'to': _formatDate(_endDate!),
+        'from': _fmtDate(_rangeStart!),
+        'to': _fmtDate(_rangeEnd!),
       },
       fetchPolicy: FetchPolicy.networkOnly,
     ));
 
     if (!mounted) return;
+
     setState(() {
-      _checkingAvailability = false;
+      _isChecking = false;
       if (result.hasException) {
         _availabilityError = result.exception.toString();
+        _availState = AvailabilityState.selected;
       } else {
-        _availabilityResult = result.data!['roomAvailability'];
+        final data = result.data!['roomAvailability'] as Map<String, dynamic>;
+        _availabilityResult = data;
+        final available = data['available'] as bool;
+        if (available) {
+          _availState = AvailabilityState.checkedAvailable;
+        } else {
+          final conflicts = data['conflicts'] as List;
+          _busyDays = _computeBusyDays(conflicts);
+          _availState = AvailabilityState.checkedConflict;
+        }
       }
     });
   }
 
+  // ── Create booking ──────────────────────────────────────────
+
   Future<void> _createBooking(GraphQLClient client) async {
-    if (!_datesValid) return;
+    if (!_rangeValid) return;
     setState(() {
+      _isBooking = true;
       _actionMessage = null;
     });
 
@@ -97,8 +201,8 @@ class _RoomScreenState extends State<RoomScreen> {
       variables: {
         'input': {
           'roomId': widget.roomId,
-          'startDate': _formatDate(_startDate!),
-          'endDate': _formatDate(_endDate!),
+          'startDate': _fmtDate(_rangeStart!),
+          'endDate': _fmtDate(_rangeEnd!),
         },
       },
     ));
@@ -107,25 +211,40 @@ class _RoomScreenState extends State<RoomScreen> {
 
     if (result.hasException) {
       final gqlErrors = result.exception?.graphqlErrors ?? [];
-      final isOverlap = gqlErrors.any(
-        (e) => e.extensions?['code'] == 'BOOKING_OVERLAP',
-      );
-      setState(() {
-        _actionIsError = true;
-        _actionMessage = isOverlap
-            ? tr(context, 'booking_overlap')
-            : '${tr(context, 'error')}: ${result.exception}';
-      });
+      final isOverlap =
+          gqlErrors.any((e) => e.extensions?['code'] == 'BOOKING_OVERLAP');
+
+      // On overlap, re-run availability to get fresh conflicts
+      if (isOverlap) {
+        setState(() {
+          _isBooking = false;
+          _actionIsError = true;
+          _actionMessage = tr(context, 'booking_overlap');
+        });
+        // Fetch fresh conflicts
+        await _checkAvailability(client);
+      } else {
+        setState(() {
+          _isBooking = false;
+          _actionIsError = true;
+          _actionMessage =
+              '${tr(context, 'error')}: ${result.exception}';
+        });
+      }
     } else {
       final booking = result.data!['createBooking'];
       setState(() {
+        _isBooking = false;
         _actionIsError = false;
+        _availState = AvailabilityState.bookedSuccess;
         _actionMessage =
             '${tr(context, 'booking_created')}: ${booking['id']} (${booking['startDate']} → ${booking['endDate']})';
-        _availabilityResult = null;
+        _bookingsVersion++;
       });
     }
   }
+
+  // ── Cancel booking ──────────────────────────────────────────
 
   Future<void> _cancelBooking(GraphQLClient client, String bookingId) async {
     final result = await client.mutate(MutationOptions(
@@ -145,9 +264,12 @@ class _RoomScreenState extends State<RoomScreen> {
       setState(() {
         _actionIsError = false;
         _actionMessage = '${tr(context, 'booking_canceled')}: $bookingId';
+        _bookingsVersion++;
       });
     }
   }
+
+  // ── Build ───────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -183,73 +305,17 @@ class _RoomScreenState extends State<RoomScreen> {
           children: [
             Text('${tr(context, 'room_id')}: ${widget.roomId}',
                 style: theme.textTheme.bodySmall),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // ── Date pickers ──
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickDate(context, isStart: true),
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(_startDate != null
-                        ? _formatDate(_startDate!)
-                        : tr(context, 'start_date')),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickDate(context, isStart: false),
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(_endDate != null
-                        ? _formatDate(_endDate!)
-                        : tr(context, 'end_date')),
-                  ),
-                ),
-              ],
-            ),
-            if (_startDate != null &&
-                _endDate != null &&
-                !_startDate!.isBefore(_endDate!))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(tr(context, 'start_before_end'),
-                    style: const TextStyle(color: Colors.red, fontSize: 12)),
-              ),
+            // ── Calendar card ──
+            _buildCalendarCard(isDark, settings.locale),
 
             const SizedBox(height: 16),
 
             // ── Action buttons ──
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _datesValid && !_checkingAvailability
-                        ? () => _checkAvailability(client)
-                        : null,
-                    child: _checkingAvailability
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(tr(context, 'check_availability')),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        _datesValid ? () => _createBooking(client) : null,
-                    child: Text(tr(context, 'book')),
-                  ),
-                ),
-              ],
-            ),
+            _buildActionButtons(client),
 
-            // ── Availability result ──
+            // ── Availability result banner ──
             if (_availabilityError != null) ...[
               const SizedBox(height: 12),
               Text(_availabilityError!,
@@ -268,8 +334,8 @@ class _RoomScreenState extends State<RoomScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: _actionIsError
-                      ? Colors.red.withValues(alpha: 0.12)
-                      : Colors.green.withValues(alpha: 0.12),
+                      ? Colors.red.withAlpha(30)
+                      : Colors.green.withAlpha(30),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -290,6 +356,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             _BookingsList(
+              key: ValueKey('bookings_$_bookingsVersion'),
               roomId: widget.roomId,
               onCancel: (id) => _cancelBooking(client, id),
             ),
@@ -298,9 +365,217 @@ class _RoomScreenState extends State<RoomScreen> {
       ),
     );
   }
+
+  // ── Calendar card widget ────────────────────────────────────
+
+  Widget _buildCalendarCard(bool isDark, String locale) {
+    final calBg = isDark ? const Color(0xFF1E2746) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final mutedColor = isDark ? Colors.white54 : Colors.black45;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: calBg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+      child: TableCalendar(
+        firstDay: DateTime.now().subtract(const Duration(days: 30)),
+        lastDay: DateTime.now().add(const Duration(days: 730)),
+        focusedDay: _focusedDay,
+        locale: locale == 'ru' ? 'ru_RU' : 'en_US',
+        startingDayOfWeek: StartingDayOfWeek.monday,
+
+        // ── Range selection ──
+        rangeSelectionMode: RangeSelectionMode.toggledOn,
+        rangeStartDay: _rangeStart,
+        rangeEndDay: _rangeEnd,
+        onRangeSelected: _onRangeSelected,
+        onPageChanged: (focused) => _focusedDay = focused,
+
+        // ── Header ──
+        headerStyle: HeaderStyle(
+          formatButtonVisible: false,
+          titleCentered: true,
+          titleTextStyle: TextStyle(
+            color: textColor,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+          ),
+          leftChevronIcon: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: mutedColor, width: 1),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Icon(Icons.chevron_left, color: mutedColor, size: 20),
+          ),
+          rightChevronIcon: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: mutedColor, width: 1),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Icon(Icons.chevron_right, color: mutedColor, size: 20),
+          ),
+        ),
+
+        // ── Day of week labels ──
+        daysOfWeekStyle: DaysOfWeekStyle(
+          weekdayStyle: TextStyle(
+              color: mutedColor, fontSize: 13, fontWeight: FontWeight.w600),
+          weekendStyle: TextStyle(
+              color: mutedColor, fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+
+        // ── Default day styles ──
+        calendarStyle: CalendarStyle(
+          outsideDaysVisible: true,
+          defaultTextStyle: TextStyle(color: textColor, fontSize: 15),
+          weekendTextStyle: TextStyle(color: textColor, fontSize: 15),
+          outsideTextStyle:
+              TextStyle(color: mutedColor.withAlpha(80), fontSize: 15),
+          todayDecoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: _blue, width: 1.5),
+          ),
+          todayTextStyle: TextStyle(color: textColor, fontSize: 15),
+          // Range highlight bar color (fallback; overridden by builder)
+          rangeHighlightColor: _highlightBarColor(),
+          // Disable default range decorations (we use builders)
+          rangeStartDecoration: const BoxDecoration(shape: BoxShape.circle),
+          rangeEndDecoration: const BoxDecoration(shape: BoxShape.circle),
+          withinRangeDecoration: const BoxDecoration(shape: BoxShape.circle),
+          rangeStartTextStyle:
+              const TextStyle(color: Colors.white, fontSize: 15),
+          rangeEndTextStyle:
+              const TextStyle(color: Colors.white, fontSize: 15),
+          withinRangeTextStyle:
+              TextStyle(color: textColor, fontSize: 15),
+        ),
+
+        // ── Custom builders ──
+        calendarBuilders: CalendarBuilders(
+          rangeStartBuilder: (ctx, day, focused) =>
+              _buildDayCell(day, isStart: true),
+          rangeEndBuilder: (ctx, day, focused) =>
+              _buildDayCell(day, isEnd: true),
+          withinRangeBuilder: (ctx, day, focused) =>
+              _buildDayCell(day),
+          rangeHighlightBuilder: (ctx, day, isWithinRange) {
+            if (!isWithinRange) return const SizedBox.shrink();
+            return LayoutBuilder(
+              builder: (ctx, constraints) => Container(
+                height: constraints.maxHeight,
+                color: _highlightBarColor(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Build a custom day cell for days within the selected range.
+  Widget _buildDayCell(DateTime day,
+      {bool isStart = false, bool isEnd = false}) {
+    final color = _dayCircleColor(day);
+    return Center(
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${day.day}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Action buttons ──────────────────────────────────────────
+
+  Widget _buildActionButtons(GraphQLClient client) {
+    final bookEnabled =
+        _availState == AvailabilityState.checkedAvailable && !_isBooking;
+    final isBooked = _availState == AvailabilityState.bookedSuccess;
+
+    // Book button color
+    Color bookBg;
+    Color bookFg = Colors.white;
+    if (isBooked) {
+      bookBg = _deepGreen;
+    } else if (bookEnabled) {
+      bookBg = _lightGreen;
+    } else {
+      bookBg = Colors.grey;
+      bookFg = Colors.white70;
+    }
+
+    // Book button label
+    String bookLabel;
+    if (_isBooking) {
+      bookLabel = tr(context, 'booking_ellipsis');
+    } else if (isBooked) {
+      bookLabel = tr(context, 'booked');
+    } else {
+      bookLabel = tr(context, 'book');
+    }
+
+    return Row(
+      children: [
+        // ── Check availability ──
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _rangeValid && !_isChecking
+                ? () => _checkAvailability(client)
+                : null,
+            child: _isChecking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(tr(context, 'check_availability')),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // ── Book ──
+        Expanded(
+          child: ElevatedButton(
+            onPressed: bookEnabled ? () => _createBooking(client) : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: bookBg,
+              foregroundColor: bookFg,
+              disabledBackgroundColor: bookBg,
+              disabledForegroundColor: bookFg,
+            ),
+            child: _isBooking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(bookLabel),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ─── Availability banner ────────────────────────────────────
+// ─── Availability banner ────────────────────────────────────────
 
 class _AvailabilityBanner extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -316,8 +591,8 @@ class _AvailabilityBanner extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: available
-            ? Colors.green.withValues(alpha: 0.12)
-            : Colors.orange.withValues(alpha: 0.12),
+            ? Colors.green.withAlpha(30)
+            : Colors.orange.withAlpha(30),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: available ? Colors.green : Colors.orange,
@@ -350,13 +625,13 @@ class _AvailabilityBanner extends StatelessWidget {
   }
 }
 
-// ─── Bookings list (auto-refetching Query widget) ───────────
+// ─── Bookings list (auto-refetching Query widget) ─────────────
 
 class _BookingsList extends StatelessWidget {
   final String roomId;
   final void Function(String bookingId) onCancel;
 
-  const _BookingsList({required this.roomId, required this.onCancel});
+  const _BookingsList({super.key, required this.roomId, required this.onCancel});
 
   @override
   Widget build(BuildContext context) {

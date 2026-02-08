@@ -38,6 +38,17 @@ const _translations = <String, Map<String, String>>{
   'conflicts': {'en': 'Conflicts', 'ru': 'Конфликты'},
   'no_bookings': {'en': 'No bookings yet.', 'ru': 'Бронирований пока нет.'},
 
+  'select_date_range': {
+    'en': 'Select date range',
+    'ru': 'Выберите диапазон дат',
+  },
+  'booked': {'en': 'Booked', 'ru': 'Забронировано'},
+  'dates_busy': {
+    'en': 'Dates are busy',
+    'ru': 'Даты заняты',
+  },
+  'dates_free': {'en': 'Available', 'ru': 'Свободно'},
+
   // ── Messages ──
   'booking_created': {
     'en': 'Booking created',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'api/client.dart';
 import 'app_settings.dart';
@@ -9,6 +10,7 @@ import 'theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initHiveForFlutter();
+  await initializeDateFormatting();
 
   runApp(const MiniBookingApp());
 }
