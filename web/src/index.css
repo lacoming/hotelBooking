@@ -1,16 +1,77 @@
+/* ── Light theme (default) ─────────────────────────────────── */
 :root {
+  --bg: #f5f6fa;
+  --text: #213547;
+  --text-secondary: #666;
+  --card-bg: #ffffff;
+  --card-border: #e0e0e0;
+  --header-bg: #ffffff;
+  --header-border: #e0e0e0;
+  --input-bg: #ffffff;
+  --input-border: #ccc;
+  --btn-bg: #f9f9f9;
+  --btn-border: #ccc;
+  --btn-hover: #3d7bf7;
+  --primary: #3d7bf7;
+  --success-bg: #e8f5e9;
+  --success-text: #2e7d32;
+  --error-bg: #ffebee;
+  --error-text: #c62828;
+  --warning-bg: #fff3e0;
+  --warning-text: #e65100;
+  --table-header: #f5f5f5;
+  --table-border: #e0e0e0;
+  --badge-free-bg: rgba(76, 175, 80, 0.12);
+  --badge-free-text: #2e7d32;
+  --badge-busy-bg: rgba(244, 67, 54, 0.12);
+  --badge-busy-text: #c62828;
+
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #213547;
-  background-color: #ffffff;
 }
 
+/* ── Dark theme ───────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg: #141a2e;
+  --text: #e0e0e0;
+  --text-secondary: #999;
+  --card-bg: #1c2340;
+  --card-border: #2a3354;
+  --header-bg: #1c2340;
+  --header-border: #2a3354;
+  --input-bg: #222b45;
+  --input-border: #3a4565;
+  --btn-bg: #222b45;
+  --btn-border: #3a4565;
+  --btn-hover: #5a8df8;
+  --primary: #5a8df8;
+  --success-bg: rgba(76, 175, 80, 0.15);
+  --success-text: #66bb6a;
+  --error-bg: rgba(244, 67, 54, 0.15);
+  --error-text: #ef5350;
+  --warning-bg: rgba(255, 152, 0, 0.15);
+  --warning-text: #ffa726;
+  --table-header: #222b45;
+  --table-border: #2a3354;
+  --badge-free-bg: rgba(76, 175, 80, 0.15);
+  --badge-free-text: #66bb6a;
+  --badge-busy-bg: rgba(244, 67, 54, 0.15);
+  --badge-busy-text: #ef5350;
+}
+
+/* ── Global ───────────────────────────────────────────────── */
 body {
   margin: 0;
-  padding: 20px;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
   max-width: 900px;
   margin: 0 auto;
+  padding: 0 20px 20px;
 }
 
 h1 {
@@ -18,14 +79,149 @@ h1 {
   margin-top: 0;
 }
 
-button {
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  background: #f9f9f9;
+h2 {
+  margin-top: 0.5rem;
 }
 
-button:hover {
-  border-color: #646cff;
+/* ── Buttons ──────────────────────────────────────────────── */
+button {
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--btn-hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+button.primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+/* ── Inputs ───────────────────────────────────────────────── */
+input[type="date"] {
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}
+
+/* ── Header bar ───────────────────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--header-border);
+  margin-bottom: 16px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text);
+  border-radius: 6px;
+}
+
+.icon-btn:hover {
+  background: var(--card-border);
+}
+
+.lang-btn {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-free {
+  background: var(--badge-free-bg);
+  color: var(--badge-free-text);
+}
+
+.badge-busy {
+  background: var(--badge-busy-bg);
+  color: var(--badge-busy-text);
+}
+
+/* ── Messages ─────────────────────────────────────────────── */
+.msg-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.msg-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.msg-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin: 8px 0;
 }

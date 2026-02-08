@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import '../api/graphql_documents.dart';
+import '../app_settings.dart';
+import '../l10n.dart';
 
 class RoomScreen extends StatefulWidget {
   final String roomId;
@@ -111,15 +113,15 @@ class _RoomScreenState extends State<RoomScreen> {
       setState(() {
         _actionIsError = true;
         _actionMessage = isOverlap
-            ? 'Dates overlap with an existing booking.'
-            : 'Error: ${result.exception}';
+            ? tr(context, 'booking_overlap')
+            : '${tr(context, 'error')}: ${result.exception}';
       });
     } else {
       final booking = result.data!['createBooking'];
       setState(() {
         _actionIsError = false;
         _actionMessage =
-            'Booking created: ${booking['id']} (${booking['startDate']} → ${booking['endDate']})';
+            '${tr(context, 'booking_created')}: ${booking['id']} (${booking['startDate']} → ${booking['endDate']})';
         _availabilityResult = null;
       });
     }
@@ -136,12 +138,13 @@ class _RoomScreenState extends State<RoomScreen> {
     if (result.hasException) {
       setState(() {
         _actionIsError = true;
-        _actionMessage = 'Cancel error: ${result.exception}';
+        _actionMessage =
+            '${tr(context, 'cancel_error')}: ${result.exception}';
       });
     } else {
       setState(() {
         _actionIsError = false;
-        _actionMessage = 'Booking $bookingId canceled.';
+        _actionMessage = '${tr(context, 'booking_canceled')}: $bookingId';
       });
     }
   }
@@ -149,36 +152,59 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   Widget build(BuildContext context) {
     final client = GraphQLProvider.of(context).value;
+    final theme = Theme.of(context);
+    final settings = AppSettings.of(context);
+    final isDark = settings.themeMode == ThemeMode.dark;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.roomName)),
+      appBar: AppBar(
+        title: Text(widget.roomName),
+        actions: [
+          TextButton(
+            onPressed: settings.toggleLocale,
+            child: Text(
+              settings.locale == 'en' ? 'RU' : 'EN',
+              style: TextStyle(
+                color: theme.appBarTheme.foregroundColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: settings.toggleTheme,
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Room ID: ${widget.roomId}',
-                style: Theme.of(context).textTheme.bodySmall),
+            Text('${tr(context, 'room_id')}: ${widget.roomId}',
+                style: theme.textTheme.bodySmall),
             const SizedBox(height: 16),
 
             // ── Date pickers ──
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: OutlinedButton.icon(
                     onPressed: () => _pickDate(context, isStart: true),
-                    child: Text(_startDate != null
+                    icon: const Icon(Icons.calendar_today, size: 16),
+                    label: Text(_startDate != null
                         ? _formatDate(_startDate!)
-                        : 'Start date'),
+                        : tr(context, 'start_date')),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
+                  child: OutlinedButton.icon(
                     onPressed: () => _pickDate(context, isStart: false),
-                    child: Text(_endDate != null
+                    icon: const Icon(Icons.calendar_today, size: 16),
+                    label: Text(_endDate != null
                         ? _formatDate(_endDate!)
-                        : 'End date'),
+                        : tr(context, 'end_date')),
                   ),
                 ),
               ],
@@ -186,33 +212,39 @@ class _RoomScreenState extends State<RoomScreen> {
             if (_startDate != null &&
                 _endDate != null &&
                 !_startDate!.isBefore(_endDate!))
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text('Start must be before end',
-                    style: TextStyle(color: Colors.red, fontSize: 12)),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(tr(context, 'start_before_end'),
+                    style: const TextStyle(color: Colors.red, fontSize: 12)),
               ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
             // ── Action buttons ──
             Row(
               children: [
-                ElevatedButton(
-                  onPressed: _datesValid && !_checkingAvailability
-                      ? () => _checkAvailability(client)
-                      : null,
-                  child: _checkingAvailability
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Check availability'),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _datesValid && !_checkingAvailability
+                        ? () => _checkAvailability(client)
+                        : null,
+                    child: _checkingAvailability
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(tr(context, 'check_availability')),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _datesValid ? () => _createBooking(client) : null,
-                  child: const Text('Book'),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        _datesValid ? () => _createBooking(client) : null,
+                    child: Text(tr(context, 'book')),
+                  ),
                 ),
               ],
             ),
@@ -232,19 +264,19 @@ class _RoomScreenState extends State<RoomScreen> {
             if (_actionMessage != null) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(10),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: _actionIsError
-                      ? Colors.red.shade50
-                      : Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(6),
+                      ? Colors.red.withValues(alpha: 0.12)
+                      : Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   _actionMessage!,
                   style: TextStyle(
-                    color: _actionIsError
-                        ? Colors.red.shade800
-                        : Colors.green.shade800,
+                    color: _actionIsError ? Colors.red : Colors.green,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -254,7 +286,8 @@ class _RoomScreenState extends State<RoomScreen> {
             const Divider(),
 
             // ── Bookings list ──
-            Text('Bookings', style: Theme.of(context).textTheme.titleMedium),
+            Text(tr(context, 'bookings'),
+                style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             _BookingsList(
               roomId: widget.roomId,
@@ -280,28 +313,32 @@ class _AvailabilityBanner extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: available ? Colors.green.shade50 : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(6),
+        color: available
+            ? Colors.green.withValues(alpha: 0.12)
+            : Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: available ? Colors.green : Colors.orange,
+          width: 0.5,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            available ? 'Available' : 'Not available',
+            tr(context, available ? 'available' : 'not_available'),
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: available ? Colors.green.shade800 : Colors.orange.shade800,
+              color: available ? Colors.green : Colors.orange,
             ),
           ),
           if (conflicts.isNotEmpty) ...[
             const SizedBox(height: 6),
-            const Text('Conflicts:',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text('${tr(context, 'conflicts')}:',
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             ...conflicts.map((c) => Text(
                   '  ${c['id']}: ${c['startDate']} → ${c['endDate']}',
                   style: const TextStyle(fontSize: 13),
@@ -338,14 +375,15 @@ class _BookingsList extends StatelessWidget {
         }
 
         if (result.hasException) {
-          return Text('Error loading bookings: ${result.exception}');
+          return Text(
+              '${tr(context, 'error_loading')}: ${result.exception}');
         }
 
         final bookings = result.data!['roomBookings'] as List;
         if (bookings.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text('No bookings yet.'),
+          return Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text(tr(context, 'no_bookings')),
           );
         }
 
@@ -367,13 +405,12 @@ class _BookingsList extends StatelessWidget {
                       ? TextButton(
                           onPressed: () async {
                             onCancel(b['id'] as String);
-                            // Refetch after a short delay to let mutation complete
                             await Future.delayed(
                                 const Duration(milliseconds: 500));
                             refetch?.call();
                           },
-                          child: const Text('Cancel',
-                              style: TextStyle(color: Colors.red)),
+                          child: Text(tr(context, 'cancel'),
+                              style: const TextStyle(color: Colors.red)),
                         )
                       : null,
                 ),
@@ -383,7 +420,7 @@ class _BookingsList extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => refetch?.call(),
               icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Refresh'),
+              label: Text(tr(context, 'refresh')),
             ),
           ],
         );

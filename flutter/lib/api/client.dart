@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart'
-    show kIsWeb, debugPrint, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, debugPrint, defaultTargetPlatform, TargetPlatform, ValueNotifier;
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 /// Override via: flutter run --dart-define=API_URL=http://192.168.x.x:4000/graphql
