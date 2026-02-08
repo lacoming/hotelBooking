@@ -33,7 +33,6 @@ function App() {
         {header}
         <RoomPage
           roomId={selectedRoom.id}
-          roomName={selectedRoom.name}
           onBack={() => setSelectedRoom(null)}
         />
       </>

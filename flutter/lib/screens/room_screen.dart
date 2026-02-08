@@ -191,6 +191,17 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _createBooking(GraphQLClient client) async {
     if (!_rangeValid) return;
+
+    // Prevent booking in the past
+    final today = _norm(DateTime.now());
+    if (_rangeStart!.isBefore(today)) {
+      setState(() {
+        _actionIsError = true;
+        _actionMessage = tr(context, 'past_dates');
+      });
+      return;
+    }
+
     setState(() {
       _isBooking = true;
       _actionMessage = null;
@@ -237,8 +248,9 @@ class _RoomScreenState extends State<RoomScreen> {
         _isBooking = false;
         _actionIsError = false;
         _availState = AvailabilityState.bookedSuccess;
+        final locale = AppSettings.of(context).locale;
         _actionMessage =
-            '${tr(context, 'booking_created')}: ${booking['id']} (${booking['startDate']} → ${booking['endDate']})';
+            '${tr(context, 'booking_created')}: ${booking['id']} (${formatDateRange(booking['startDate'], booking['endDate'], locale)})';
         _bookingsVersion++;
       });
     }
@@ -380,7 +392,7 @@ class _RoomScreenState extends State<RoomScreen> {
       ),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
       child: TableCalendar(
-        firstDay: DateTime.now().subtract(const Duration(days: 30)),
+        firstDay: DateTime.now(),
         lastDay: DateTime.now().add(const Duration(days: 730)),
         focusedDay: _focusedDay,
         locale: locale == 'ru' ? 'ru_RU' : 'en_US',
@@ -614,10 +626,13 @@ class _AvailabilityBanner extends StatelessWidget {
             Text('${tr(context, 'conflicts')}:',
                 style:
                     const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            ...conflicts.map((c) => Text(
-                  '  ${c['id']}: ${c['startDate']} → ${c['endDate']}',
-                  style: const TextStyle(fontSize: 13),
-                )),
+            ...conflicts.map((c) {
+              final locale = AppSettings.of(context).locale;
+              return Text(
+                '  ${c['id']}: ${formatDateRange(c['startDate'], c['endDate'], locale)}',
+                style: const TextStyle(fontSize: 13),
+              );
+            }),
           ],
         ],
       ),
@@ -640,6 +655,7 @@ class _BookingsList extends StatelessWidget {
         document: roomBookingsQuery,
         variables: {'roomId': roomId},
         fetchPolicy: FetchPolicy.cacheAndNetwork,
+        pollInterval: const Duration(seconds: 30),
       ),
       builder: (result, {refetch, fetchMore}) {
         if (result.isLoading && result.data == null) {
@@ -668,7 +684,11 @@ class _BookingsList extends StatelessWidget {
               final isActive = b['status'] == 'ACTIVE';
               return Card(
                 child: ListTile(
-                  title: Text('${b['startDate']} → ${b['endDate']}'),
+                  title: Text(formatDateRange(
+                    b['startDate'] as String,
+                    b['endDate'] as String,
+                    AppSettings.of(context).locale,
+                  )),
                   subtitle: Text(
                     '${b['status']}  •  ${b['id']}',
                     style: TextStyle(

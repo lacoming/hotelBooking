@@ -97,6 +97,13 @@ export const resolvers = {
         });
       }
 
+      const today = new Date().toISOString().split("T")[0];
+      if (startDate < today) {
+        throw new GraphQLError("Cannot book dates in the past", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+
       const room = await prisma.room.findUnique({ where: { id: roomId } });
       if (!room) {
         throw new GraphQLError("Room not found", {
@@ -176,6 +183,9 @@ export const resolvers = {
         JSON.stringify({
           event: "booking_canceled",
           bookingId: id,
+          roomId: booking.roomId,
+          startDate: booking.startDate.toISOString().split("T")[0],
+          endDate: booking.endDate.toISOString().split("T")[0],
           ts: new Date().toISOString(),
         }),
       );

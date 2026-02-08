@@ -25,11 +25,10 @@ interface AvailabilityResult {
 
 interface Props {
   roomId: string;
-  roomName: string;
   onBack: () => void;
 }
 
-export default function RoomPage({ roomId, roomName, onBack }: Props) {
+export default function RoomPage({ roomId, onBack }: Props) {
   const { t } = useI18n();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -42,6 +41,7 @@ export default function RoomPage({ roomId, roomName, onBack }: Props) {
     refetch: refetchBookings,
   } = useQuery<{ roomBookings: Booking[] }>(GET_ROOM_BOOKINGS, {
     variables: { roomId },
+    pollInterval: 30_000,
   });
 
   const [checkAvail, { loading: checkingAvail }] = useLazyQuery<{ roomAvailability: AvailabilityResult }>(CHECK_AVAILABILITY, { fetchPolicy: "network-only" });

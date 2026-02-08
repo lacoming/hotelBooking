@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -5,7 +6,21 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'api/client.dart';
 import 'app_settings.dart';
 import 'screens/hotels_screen.dart';
+import 'screens/overview_screen.dart';
 import 'theme.dart';
+
+/// Desktop platforms get the "light overview" home screen.
+bool get _isDesktop {
+  if (kIsWeb) return false;
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.windows:
+    case TargetPlatform.macOS:
+    case TargetPlatform.linux:
+      return true;
+    default:
+      return false;
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +69,9 @@ class _MiniBookingAppState extends State<MiniBookingApp> {
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: _themeMode,
-          home: const HotelsScreen(),
+          home: _isDesktop
+              ? const OverviewScreen()
+              : const HotelsScreen(),
         ),
       ),
     );

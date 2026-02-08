@@ -15,9 +15,10 @@ const _translations = <String, Map<String, String>>{
   'loading': {'en': 'Loading...', 'ru': 'Загрузка...'},
 
   // ── Hotels screen ──
-  'capacity': {'en': 'Capacity', 'ru': 'Вместимость'},
+  'capacity': {'en': 'Max guests', 'ru': 'Макс. кол-во человек'},
   'free_today': {'en': 'Free', 'ru': 'Свободно'},
-  'busy_today': {'en': 'Busy', 'ru': 'Занято'},
+  'busy_today': {'en': 'Has free dates', 'ru': 'Есть свободные даты'},
+  'overview': {'en': 'Overview', 'ru': 'Обзор'},
 
   // ── Room screen ──
   'room_id': {'en': 'Room ID', 'ru': 'ID комнаты'},
@@ -66,6 +67,10 @@ const _translations = <String, Map<String, String>>{
     'en': 'Cancel error',
     'ru': 'Ошибка отмены',
   },
+  'past_dates': {
+    'en': 'Cannot book dates in the past',
+    'ru': 'Нельзя бронировать прошедшие даты',
+  },
   'error': {'en': 'Error', 'ru': 'Ошибка'},
   'error_loading': {
     'en': 'Error loading data',
@@ -77,4 +82,41 @@ const _translations = <String, Map<String, String>>{
 String tr(BuildContext context, String key) {
   final locale = AppSettings.of(context).locale;
   return _translations[key]?[locale] ?? key;
+}
+
+// ── Month names (genitive for Russian) ──────────────────────────
+const _monthsRu = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+];
+
+const _monthsEn = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/// Smart date range formatting:
+///   Same month+year:  "06 - 11 февраля 2026"
+///   Same year:        "06 февраля - 13 марта 2026"
+///   Different years:  "12 декабря 2025 - 08 января 2026"
+String formatDateRange(String startDate, String endDate, String locale) {
+  final s = DateTime.parse(startDate);
+  final e = DateTime.parse(endDate);
+  final months = locale == 'ru' ? _monthsRu : _monthsEn;
+
+  final sd = s.day.toString().padLeft(2, '0');
+  final ed = e.day.toString().padLeft(2, '0');
+  final sMonth = months[s.month - 1];
+  final eMonth = months[e.month - 1];
+
+  if (s.year == e.year && s.month == e.month) {
+    // 06 - 11 февраля 2026
+    return '$sd - $ed $eMonth ${e.year}';
+  } else if (s.year == e.year) {
+    // 06 февраля - 13 марта 2026
+    return '$sd $sMonth - $ed $eMonth ${e.year}';
+  } else {
+    // 12 декабря 2025 - 08 января 2026
+    return '$sd $sMonth ${s.year} - $ed $eMonth ${e.year}';
+  }
 }

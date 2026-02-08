@@ -4,7 +4,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import '../api/graphql_documents.dart';
 import '../app_settings.dart';
 import '../l10n.dart';
-import 'room_screen.dart';
+import 'rooms_screen.dart';
 
 class HotelsScreen extends StatelessWidget {
   const HotelsScreen({super.key});
@@ -92,8 +92,9 @@ class HotelsScreen extends StatelessWidget {
                 final hotel = hotels[i];
                 final rooms = hotel['rooms'] as List;
                 return _HotelCard(
+                  hotelId: hotel['id'] as String,
                   hotelName: hotel['name'] as String,
-                  rooms: rooms,
+                  roomCount: rooms.length,
                 );
               },
             ),
@@ -107,184 +108,61 @@ class HotelsScreen extends StatelessWidget {
 // ─── Hotel card ──────────────────────────────────────────────
 
 class _HotelCard extends StatelessWidget {
+  final String hotelId;
   final String hotelName;
-  final List rooms;
+  final int roomCount;
 
-  const _HotelCard({required this.hotelName, required this.rooms});
+  const _HotelCard({
+    required this.hotelId,
+    required this.hotelName,
+    required this.roomCount,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              hotelName,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${rooms.length} ${tr(context, 'rooms').toLowerCase()}',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            ...rooms.map((room) => _RoomTile(room: room)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Room tile with Free/Busy badge ─────────────────────────
-
-class _RoomTile extends StatelessWidget {
-  final Map<String, dynamic> room;
-
-  const _RoomTile({required this.room});
-
-  String get _today {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
-
-  String get _tomorrow {
-    final t = DateTime.now().add(const Duration(days: 1));
-    return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final roomId = room['id'] as String;
-    final roomName = room['name'] as String;
-    final cap = room['capacity'];
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  RoomScreen(roomId: roomId, roomName: roomName),
+                  RoomsScreen(hotelId: hotelId, hotelName: hotelName),
             ),
           );
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Room info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      roomName,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      hotelName,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (cap != null)
-                      Text(
-                        '${tr(context, 'capacity')}: $cap',
-                        style: theme.textTheme.bodySmall,
-                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$roomCount ${tr(context, 'rooms').toLowerCase()}',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
-              // Free/Busy badge
-              _AvailabilityBadge(roomId: roomId, today: _today, tomorrow: _tomorrow),
-              const SizedBox(width: 8),
               Icon(Icons.chevron_right,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                  color:
+                      theme.colorScheme.onSurface.withValues(alpha: 0.4)),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-// ─── Availability badge (queries roomAvailability for today) ─
-
-class _AvailabilityBadge extends StatelessWidget {
-  final String roomId;
-  final String today;
-  final String tomorrow;
-
-  const _AvailabilityBadge({
-    required this.roomId,
-    required this.today,
-    required this.tomorrow,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Query(
-      options: QueryOptions(
-        document: roomAvailabilityQuery,
-        variables: {'roomId': roomId, 'from': today, 'to': tomorrow},
-        fetchPolicy: FetchPolicy.cacheAndNetwork,
-      ),
-      builder: (result, {refetch, fetchMore}) {
-        if (result.isLoading && result.data == null) {
-          return const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          );
-        }
-
-        if (result.hasException || result.data == null) {
-          return const Icon(Icons.help_outline, size: 18, color: Colors.grey);
-        }
-
-        final available =
-            result.data!['roomAvailability']['available'] as bool;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: available
-                ? Colors.green.withValues(alpha: 0.15)
-                : Colors.red.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                available ? Icons.check_circle : Icons.cancel,
-                size: 14,
-                color: available ? Colors.green : Colors.red,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                tr(context, available ? 'free_today' : 'busy_today'),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: available ? Colors.green : Colors.red,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

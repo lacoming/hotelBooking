@@ -44,6 +44,20 @@ final roomAvailabilityQuery = gql(r'''
   }
 ''');
 
+final hotelQuery = gql(r'''
+  query Hotel($id: ID!) {
+    hotel(id: $id) {
+      id
+      name
+      rooms {
+        id
+        name
+        capacity
+      }
+    }
+  }
+''');
+
 // ─── Mutations ──────────────────────────────────────────────
 
 final createBookingMutation = gql(r'''

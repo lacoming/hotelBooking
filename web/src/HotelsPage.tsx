@@ -33,7 +33,9 @@ function tomorrowStr(): string {
 
 export default function HotelsPage({ onSelectRoom }: Props) {
   const { t } = useI18n();
-  const { data, loading, error } = useQuery<{ hotels: Hotel[] }>(GET_HOTELS);
+  const { data, loading, error } = useQuery<{ hotels: Hotel[] }>(GET_HOTELS, {
+    pollInterval: 60_000,
+  });
   const client = useApolloClient();
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
 
@@ -49,7 +51,7 @@ export default function HotelsPage({ onSelectRoom }: Props) {
             variables: { roomId: room.id, from: today, to: tomorrow },
             fetchPolicy: "network-only",
           });
-          results[room.id] = data.roomAvailability.available;
+          results[room.id] = (data as { roomAvailability: { available: boolean } }).roomAvailability.available;
         } catch {
           // ignore errors for badge
         }
@@ -61,6 +63,7 @@ export default function HotelsPage({ onSelectRoom }: Props) {
   useEffect(() => {
     if (data?.hotels) {
       const allRooms = data.hotels.flatMap((h) => h.rooms);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch, not synchronous setState
       fetchAvailability(allRooms);
     }
   }, [data, fetchAvailability]);
