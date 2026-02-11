@@ -28,8 +28,14 @@ enum AvailabilityState {
 class RoomScreen extends StatefulWidget {
   final String roomId;
   final String roomName;
+  final String hotelTimezone;
 
-  const RoomScreen({super.key, required this.roomId, required this.roomName});
+  const RoomScreen({
+    super.key,
+    required this.roomId,
+    required this.roomName,
+    this.hotelTimezone = 'Europe/Moscow',
+  });
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
@@ -249,8 +255,12 @@ class _RoomScreenState extends State<RoomScreen> {
         _actionIsError = false;
         _availState = AvailabilityState.bookedSuccess;
         final locale = AppSettings.of(context).locale;
+        final checkIn = formatCheckTime(16, 0, widget.hotelTimezone);
+        final checkOut = formatCheckTime(12, 0, widget.hotelTimezone);
         _actionMessage =
-            '${tr(context, 'booking_created')}: ${booking['id']} (${formatDateRange(booking['startDate'], booking['endDate'], locale)})';
+            '${tr(context, 'booking_created')}: ${formatDateRange(booking['startDate'], booking['endDate'], locale)}\n'
+            '${tr(context, 'check_in')}: ${booking['startDate']} $checkIn\n'
+            '${tr(context, 'check_out')}: ${booking['endDate']} $checkOut';
         _bookingsVersion++;
       });
     }
@@ -322,6 +332,11 @@ class _RoomScreenState extends State<RoomScreen> {
             // ── Calendar card ──
             _buildCalendarCard(isDark, settings.locale),
 
+            const SizedBox(height: 12),
+
+            // ── Check-in/Check-out info card ──
+            _buildCheckInOutCard(),
+
             const SizedBox(height: 16),
 
             // ── Action buttons ──
@@ -370,6 +385,7 @@ class _RoomScreenState extends State<RoomScreen> {
             _BookingsList(
               key: ValueKey('bookings_$_bookingsVersion'),
               roomId: widget.roomId,
+              hotelTimezone: widget.hotelTimezone,
               onCancel: (id) => _cancelBooking(client, id),
             ),
           ],
@@ -513,6 +529,56 @@ class _RoomScreenState extends State<RoomScreen> {
     );
   }
 
+  // ── Check-in / Check-out info card ─────────────────────────
+
+  Widget _buildCheckInOutCard() {
+    final theme = Theme.of(context);
+    final checkInStr = formatCheckTime(16, 0, widget.hotelTimezone);
+    final checkOutStr = formatCheckTime(12, 0, widget.hotelTimezone);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withAlpha(40),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withAlpha(60),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Text(
+                tr(context, 'check_in_out_info'),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${tr(context, 'check_in')}: $checkInStr',
+            style: const TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${tr(context, 'check_out')}: $checkOutStr',
+            style: const TextStyle(fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Action buttons ──────────────────────────────────────────
 
   Widget _buildActionButtons(GraphQLClient client) {
@@ -644,9 +710,15 @@ class _AvailabilityBanner extends StatelessWidget {
 
 class _BookingsList extends StatelessWidget {
   final String roomId;
+  final String hotelTimezone;
   final void Function(String bookingId) onCancel;
 
-  const _BookingsList({super.key, required this.roomId, required this.onCancel});
+  const _BookingsList({
+    super.key,
+    required this.roomId,
+    required this.hotelTimezone,
+    required this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -689,12 +761,26 @@ class _BookingsList extends StatelessWidget {
                     b['endDate'] as String,
                     AppSettings.of(context).locale,
                   )),
-                  subtitle: Text(
-                    '${b['status']}  •  ${b['id']}',
-                    style: TextStyle(
-                      color: isActive ? Colors.green : Colors.grey,
-                      fontSize: 12,
-                    ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${b['status']}  •  ${b['id']}',
+                        style: TextStyle(
+                          color: isActive ? Colors.green : Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (isActive)
+                        Text(
+                          '${tr(context, 'check_in')}: ${b['startDate']} ${formatCheckTime(16, 0, hotelTimezone)}\n'
+                          '${tr(context, 'check_out')}: ${b['endDate']} ${formatCheckTime(12, 0, hotelTimezone)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+                          ),
+                        ),
+                    ],
                   ),
                   trailing: isActive
                       ? TextButton(

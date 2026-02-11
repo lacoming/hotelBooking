@@ -90,7 +90,10 @@ class OverviewScreen extends StatelessWidget {
                                   ),
                         ),
                         const SizedBox(height: 12),
-                        ...rooms.map((room) => _RoomTile(room: room)),
+                        ...rooms.map((room) => _RoomTile(
+                              room: room,
+                              hotelTimezone: (hotel['timezone'] as String?) ?? 'Europe/Moscow',
+                            )),
                       ],
                     ),
                   ),
@@ -117,8 +120,9 @@ class OverviewScreen extends StatelessWidget {
 
 class _RoomTile extends StatelessWidget {
   final Map<String, dynamic> room;
+  final String hotelTimezone;
 
-  const _RoomTile({required this.room});
+  const _RoomTile({required this.room, required this.hotelTimezone});
 
   String get _today {
     final now = DateTime.now();
@@ -145,8 +149,11 @@ class _RoomTile extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  RoomScreen(roomId: roomId, roomName: roomName),
+              builder: (_) => RoomScreen(
+                    roomId: roomId,
+                    roomName: roomName,
+                    hotelTimezone: hotelTimezone,
+                  ),
             ),
           );
         },

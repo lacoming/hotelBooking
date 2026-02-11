@@ -7,6 +7,7 @@ final hotelsQuery = gql(r'''
     hotels {
       id
       name
+      timezone
       rooms {
         id
         name
@@ -49,6 +50,7 @@ final hotelQuery = gql(r'''
     hotel(id: $id) {
       id
       name
+      timezone
       rooms {
         id
         name

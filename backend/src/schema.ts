@@ -9,6 +9,7 @@ export const typeDefs = `#graphql
   type Hotel {
     id: ID!
     name: String!
+    timezone: String!
     rooms: [Room!]!
   }
 

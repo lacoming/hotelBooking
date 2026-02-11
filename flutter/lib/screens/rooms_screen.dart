@@ -78,6 +78,7 @@ class RoomsScreen extends StatelessWidget {
             return Center(child: Text(tr(context, 'error')));
           }
           final rooms = hotel['rooms'] as List;
+          final hotelTimezone = (hotel['timezone'] as String?) ?? 'Europe/Moscow';
 
           return RefreshIndicator(
             onRefresh: () async => refetch!(),
@@ -96,7 +97,7 @@ class RoomsScreen extends StatelessWidget {
                     ),
                   );
                 }
-                return _RoomTile(room: rooms[i]);
+                return _RoomTile(room: rooms[i], hotelTimezone: hotelTimezone);
               },
             ),
           );
@@ -110,8 +111,9 @@ class RoomsScreen extends StatelessWidget {
 
 class _RoomTile extends StatelessWidget {
   final Map<String, dynamic> room;
+  final String hotelTimezone;
 
-  const _RoomTile({required this.room});
+  const _RoomTile({required this.room, required this.hotelTimezone});
 
   String get _today {
     final now = DateTime.now();
@@ -137,8 +139,11 @@ class _RoomTile extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  RoomScreen(roomId: roomId, roomName: roomName),
+              builder: (_) => RoomScreen(
+                    roomId: roomId,
+                    roomName: roomName,
+                    hotelTimezone: hotelTimezone,
+                  ),
             ),
           );
         },

@@ -33,13 +33,13 @@ async function main() {
   // --- hotels ---
   await prisma.hotel.upsert({
     where: { id: "hotel-1" },
-    update: {},
-    create: { id: "hotel-1", name: "Grand Hotel" },
+    update: { timezone: "Europe/Moscow" },
+    create: { id: "hotel-1", name: "Grand Hotel", timezone: "Europe/Moscow" },
   });
   await prisma.hotel.upsert({
     where: { id: "hotel-2" },
-    update: {},
-    create: { id: "hotel-2", name: "Beach Resort" },
+    update: { timezone: "Asia/Dubai" },
+    create: { id: "hotel-2", name: "Beach Resort", timezone: "Asia/Dubai" },
   });
 
   // --- rooms ---

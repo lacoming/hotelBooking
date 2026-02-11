@@ -8,9 +8,10 @@ datasource db {
 }
 
 model Hotel {
-  id    String @id
-  name  String
-  rooms Room[]
+  id       String @id
+  name     String
+  timezone String @default("Europe/Moscow")
+  rooms    Room[]
 }
 
 model Room {

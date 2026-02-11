@@ -50,6 +50,16 @@ const _translations = <String, Map<String, String>>{
   },
   'dates_free': {'en': 'Available', 'ru': 'Свободно'},
 
+  // ── Check-in/out ──
+  'check_in': {'en': 'Check-in', 'ru': 'Заезд'},
+  'check_out': {'en': 'Check-out', 'ru': 'Выезд'},
+  'hotel_time': {'en': 'Hotel time', 'ru': 'Время отеля'},
+  'your_time': {'en': 'Your time', 'ru': 'Ваше время'},
+  'check_in_out_info': {
+    'en': 'Check-in from 16:00, check-out until 12:00',
+    'ru': 'Заезд с 16:00, выезд до 12:00',
+  },
+
   // ── Messages ──
   'booking_created': {
     'en': 'Booking created',
@@ -94,6 +104,92 @@ const _monthsEn = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+// ── Timezone utilities ───────────────────────────────────────
+
+/// Map of common IANA timezone names → UTC offset in hours.
+const _tzOffsets = <String, int>{
+  'Europe/Moscow': 3,
+  'Asia/Dubai': 4,
+  'Europe/London': 0,
+  'Europe/Berlin': 1,
+  'Europe/Paris': 1,
+  'Europe/Istanbul': 3,
+  'Asia/Tokyo': 9,
+  'America/New_York': -5,
+  'America/Los_Angeles': -8,
+  'UTC': 0,
+};
+
+/// Short display name for timezone.
+const _tzShortNames = <String, String>{
+  'Europe/Moscow': 'MSK',
+  'Asia/Dubai': 'GST',
+  'Europe/London': 'GMT',
+  'Europe/Berlin': 'CET',
+  'Europe/Paris': 'CET',
+  'Europe/Istanbul': 'TRT',
+  'Asia/Tokyo': 'JST',
+  'America/New_York': 'EST',
+  'America/Los_Angeles': 'PST',
+  'UTC': 'UTC',
+};
+
+/// Get UTC offset hours for a timezone. Returns 0 if unknown.
+int getUtcOffset(String ianaTz) => _tzOffsets[ianaTz] ?? 0;
+
+/// Get short name for a timezone.
+String getTzShortName(String ianaTz) => _tzShortNames[ianaTz] ?? ianaTz;
+
+/// Get the device's local UTC offset in hours.
+int getLocalUtcOffset() => DateTime.now().timeZoneOffset.inHours;
+
+/// Get the device's timezone short name (e.g. "UTC+3").
+String getLocalTzShortName() {
+  final offset = getLocalUtcOffset();
+  if (offset == 0) return 'UTC';
+  final sign = offset > 0 ? '+' : '';
+  return 'UTC$sign$offset';
+}
+
+/// Convert a time (hour:minute) from one UTC offset to another.
+/// Returns (hour, minute, dayDelta) where dayDelta is -1, 0, or +1.
+({int hour, int minute, int dayDelta}) convertTime(
+    int hour, int minute, int fromOffset, int toOffset) {
+  final diff = toOffset - fromOffset;
+  var newHour = hour + diff;
+  var dayDelta = 0;
+  if (newHour >= 24) {
+    newHour -= 24;
+    dayDelta = 1;
+  } else if (newHour < 0) {
+    newHour += 24;
+    dayDelta = -1;
+  }
+  return (hour: newHour, minute: minute, dayDelta: dayDelta);
+}
+
+/// Format check-in or check-out time with optional local conversion.
+/// Returns e.g. "16:00 (MSK)" or "16:00 (MSK) / 14:00 (your time)" if different.
+String formatCheckTime(int hour, int minute, String hotelTz) {
+  final hotelOffset = getUtcOffset(hotelTz);
+  final localOffset = getLocalUtcOffset();
+  final hotelShort = getTzShortName(hotelTz);
+  final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+  if (hotelOffset == localOffset) {
+    return '$timeStr ($hotelShort)';
+  }
+
+  final local = convertTime(hour, minute, hotelOffset, localOffset);
+  final localStr =
+      '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  final localTzName = getLocalTzShortName();
+  final dayNote = local.dayDelta != 0
+      ? (local.dayDelta > 0 ? ' +1d' : ' -1d')
+      : '';
+  return '$timeStr ($hotelShort) / $localStr$dayNote ($localTzName)';
+}
 
 /// Smart date range formatting:
 ///   Same month+year:  "06 - 11 февраля 2026"
